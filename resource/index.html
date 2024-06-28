@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script>
+        const loadChannel = async () => {
+            const response = await fetch("/channels")
+            return await response.json()
+        }
+
+        loadChannel().then(o => {
+            document.getElementById('channels').innerHTML = o.map(o => {
+                return `${o.snippet.localized.title} / https://www.youtube.com/channel/${o.id}`
+            }).join("<br>")
+        })
+
+        const liveStart = async () => {
+            const response = await fetch("/live-start", {
+                method: "POST",
+                body: new FormData(document.getElementById('live-start-form'))
+            })
+            return await response.json()
+        }
+    </script>
+</head>
+<body>
+<a href="/oauth/google"><button>login</button></a>
+<hr>
+<div id="channels">
+
+</div>
+<hr>
+<form id="live-start-form">
+    <input value="108542412346336535837" type="text" name="profileId">
+    <button type="button" id="live-start-button" onclick="liveStart()">라이브 시작</button>
+</form>
+</body>
+</html>
