@@ -55,15 +55,19 @@ func StartLive(c *gin.Context) {
 	var has bool
 	if profileId, has = c.GetPostForm("profileId"); !has {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"code": 400,
+			"code": http.StatusBadRequest,
 		})
 		return
 	}
 
 	live, err := CreateLive(profileId)
 	if err != nil {
-		c.JSON(http.StatusOK, live)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    http.StatusInternalServerError,
+			"message": fmt.Sprintf("%#v", err),
+		})
 		return
 	}
-	//live.Start()
+
+	c.JSON(http.StatusOK, live)
 }

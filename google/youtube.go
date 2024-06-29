@@ -1,6 +1,7 @@
 package google
 
 import (
+	"fmt"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/youtube/v3"
 	"os/exec"
@@ -18,12 +19,21 @@ var OauthConfig = &oauth2.Config{
 var BackUpIndex = 0
 var StreamProcesses = make([]*Stream, 0)
 
+type StreamStatus string
+
+const (
+	Ready   StreamStatus = "ready"
+	Running StreamStatus = "running"
+	Stopped StreamStatus = "stopped"
+)
+
 type Stream struct {
-	Resource *youtube.LiveBroadcast
-	Process  *exec.Cmd
-	Stream   *youtube.LiveStream
-	Source   string
-	Backup   int
+	ProfileId string
+	Resource  *youtube.LiveBroadcast
+	Process   *exec.Cmd
+	Stream    *youtube.LiveStream
+	Source    string
+	Backup    int
 }
 
 func GetAllChannels() (channels []*youtube.Channel) {
@@ -40,16 +50,35 @@ func GetAllChannels() (channels []*youtube.Channel) {
 	return
 }
 
-func CreateLive(profileId string) (broadCast *youtube.LiveBroadcast, err error) {
-	profile := profiles[profileId]
-
-	streamResponse, err := profile.GetStreams()
+func (p *Profile) FindOrCreateStream() (stream *youtube.LiveStream, err error) {
+	streamResponse, err := p.GetStreams()
 
 	if err != nil {
 		return
 	}
 
-	stream := streamResponse.Items[0]
+	index := 1
+	for _, process := range StreamProcesses {
+		if process.ProfileId == p.Id {
+			index += 1
+		}
+	}
+
+	if len(streamResponse.Items) > index {
+		return streamResponse.Items[index], nil
+	}
+
+	return p.CreateStreams(index)
+}
+
+func CreateLive(profileId string) (broadCast *youtube.LiveBroadcast, err error) {
+	profile := profiles[profileId]
+
+	stream, err := profile.FindOrCreateStream()
+	if err != nil {
+		return
+	}
+
 	broadCast, err = profile.CreateBroadCast(stream)
 
 	if err != nil {
@@ -58,10 +87,11 @@ func CreateLive(profileId string) (broadCast *youtube.LiveBroadcast, err error) 
 
 	BackUpIndex += 1
 	streamProcess := &Stream{
-		Resource: broadCast,
-		Stream:   stream,
-		Source:   "/Users/jipark/Workspace/ffmpeg test.mp4",
-		Backup:   BackUpIndex,
+		ProfileId: profileId,
+		Resource:  broadCast,
+		Stream:    stream,
+		Source:    "/Users/jipark/Workspace/ffmpeg test.mkv",
+		Backup:    BackUpIndex,
 	}
 	streamProcess.Process, err = ffmpeg.StartStreaming(
 		streamProcess.Source,
@@ -72,23 +102,6 @@ func CreateLive(profileId string) (broadCast *youtube.LiveBroadcast, err error) 
 	}
 
 	StreamProcesses = append(StreamProcesses, streamProcess)
-	println("pre polling")
-	time.Sleep(time.Second * 6)
-	started := false
-	for i := 0; i < 40; i++ {
-		println("polling")
-		_, err := profile.StartBroadCast(streamProcess.Resource.Id)
-		if err == nil {
-			started = true
-			break
-		}
-		time.Sleep(time.Second * 2)
-	}
-
-	// 시작 실패시 리소스 삭제
-	if !started {
-
-	}
 
 	return
 }
@@ -127,23 +140,32 @@ func (p *Profile) getStreams() (response *youtube.LiveStreamListResponse, err er
 		Do()
 }
 
-//func (p *Profile) CreateStreams() (*youtube.LiveStream, error) {
-//	return Retry(p, func() (*youtube.LiveStream, error) {
-//		return p.createStreams()
-//	})
-//}
-//
-//func (p *Profile) createStreams() (response *youtube.LiveStream, err error) {
-//	service, err := p.GetYoutubeService()
-//	if err != nil {
-//		return
-//	}
-//
-//	return service.
-//		LiveStreams.
-//		Insert().
-//		Do()
-//}
+func (p *Profile) CreateStreams(index int) (*youtube.LiveStream, error) {
+	return Retry(p, func() (*youtube.LiveStream, error) {
+		return p.createStreams(index)
+	})
+}
+
+func (p *Profile) createStreams(index int) (response *youtube.LiveStream, err error) {
+	service, err := p.GetYoutubeService()
+	if err != nil {
+		return
+	}
+
+	return service.
+		LiveStreams.
+		Insert([]string{"snippet", "cdn"}, &youtube.LiveStream{
+			Snippet: &youtube.LiveStreamSnippet{
+				Title: fmt.Sprintf("제목-%d", index),
+			},
+			Cdn: &youtube.CdnSettings{
+				IngestionType: "rtmp",
+				FrameRate:     "variable",
+				Resolution:    "variable",
+			},
+		}).
+		Do()
+}
 
 func (p *Profile) StartBroadCast(id string) (*youtube.LiveBroadcast, error) {
 	return Retry(p, func() (*youtube.LiveBroadcast, error) {
@@ -175,23 +197,35 @@ func (p *Profile) createBroadCast(stream *youtube.LiveStream) (response *youtube
 		return
 	}
 
-	return service.
+	response, err = service.
 		LiveBroadcasts.
 		Insert(
 			[]string{"id", "status", "snippet", "contentDetails"},
 			&youtube.LiveBroadcast{
 				Status: &youtube.LiveBroadcastStatus{
 					PrivacyStatus: "public",
+					//SelfDeclaredMadeForKids: false,
 				},
 				Snippet: &youtube.LiveBroadcastSnippet{
 					Title:              "제목요",
 					Description:        "내용요",
-					ScheduledStartTime: "2024-06-26 20:00:00",
+					ScheduledStartTime: time.Now().Format("2006-01-02 15:04") + ":00",
 				},
 				ContentDetails: &youtube.LiveBroadcastContentDetails{
-					BoundStreamId: stream.Cdn.IngestionInfo.StreamName,
+					EnableAutoStart: true,
+					EnableAutoStop:  true,
 				},
 			},
 		).
+		Do()
+
+	if err != nil {
+		return
+	}
+
+	return service.
+		LiveBroadcasts.
+		Bind(response.Id, []string{"id", "status", "snippet", "contentDetails"}).
+		StreamId(stream.Id).
 		Do()
 }
