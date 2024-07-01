@@ -19,13 +19,14 @@ func Route(router *gin.Engine) {
 	router.GET("/oauth/google/redirect", Redirect)
 	router.GET("/channels", Channels)
 	router.POST("/live-start", StartLive)
+	router.POST("/convert-source", Convert)
 }
 
 func Oauth(c *gin.Context) {
 	c.Redirect(
 		http.StatusFound,
 		fmt.Sprintf(
-			"%s?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&access_type=offline",
+			"%s?client_id=%s&redirect_uri=%s&response_type=code&prompt=select_account&scope=%s&access_type=offline",
 			OauthEndpoint,
 			ClientId,
 			RedirectUrl,
@@ -50,6 +51,30 @@ func Channels(c *gin.Context) {
 	c.JSON(http.StatusOK, GetAllChannels())
 }
 
+func Convert(c *gin.Context) {
+	source := ""
+	var has bool
+	if source, has = c.GetPostForm("path"); !has {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": http.StatusBadRequest,
+		})
+		return
+	}
+
+	path, err := ConvertCodec(source)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"path": path,
+	})
+}
+
 func StartLive(c *gin.Context) {
 	profileId := ""
 	var has bool
@@ -64,7 +89,7 @@ func StartLive(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    http.StatusInternalServerError,
-			"message": fmt.Sprintf("%#v", err),
+			"message": err.Error(),
 		})
 		return
 	}

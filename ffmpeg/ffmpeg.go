@@ -24,11 +24,36 @@ func CheckInstall() {
 	}
 }
 
+func ConvertCodec(source string, destination string) (cmd *exec.Cmd, err error) {
+	cmd = exec.CommandContext(
+		context.Background(),
+		"ffmpeg",
+		"-i",
+		source,
+		"-c:v",
+		"libx264",
+		"-preset",
+		"slow",
+		"-crf",
+		"22",
+		"-c:a",
+		"copy",
+		destination,
+	)
+
+	var out bytes.Buffer
+	var errorOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errorOut
+	err = cmd.Run()
+
+	return
+}
+
 func StartStreaming(source string, streamId string, backUp int) (cmd *exec.Cmd, err error) {
 	cmd = exec.CommandContext(
 		context.Background(),
 		"ffmpeg",
-		//"-version",
 		"-stream_loop",
 		"-1",
 		"-i",
@@ -45,8 +70,6 @@ func StartStreaming(source string, streamId string, backUp int) (cmd *exec.Cmd, 
 		"3",
 		"-b:a",
 		"712000",
-		//"-vcodec",
-		//"libx264",
 		"-f",
 		"flv",
 		fmt.Sprintf("rtmp://b.rtmp.youtube.com/live2/%s?backup=%d", streamId, backUp),

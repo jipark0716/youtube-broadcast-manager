@@ -56,6 +56,9 @@ func Retry[T interface{}](p *Profile, action func() (T, error)) (response T, err
 		if err == nil {
 			return
 		}
+		if p.Token.RefreshToken == "" {
+			return
+		}
 		token, err := TokenRefresh(p.Token.RefreshToken)
 		if err == nil {
 			p.Token = token

@@ -7,6 +7,7 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Document</title>
     <script>
+        location.href = 'rtmp://addChannel'
         const loadChannel = async () => {
             const response = await fetch("/channels")
             return await response.json()
@@ -23,8 +24,14 @@
                 method: "POST",
                 body: new FormData(document.getElementById('live-start-form'))
             })
-            return await response.json()
+            const result = await response.json()
+
+            document.getElementById('live-start-form').reset()
+
+            return result
         }
+
+        // window.app.selectFile().then(console.log)
     </script>
 </head>
 <body>
@@ -35,7 +42,10 @@
 </div>
 <hr>
 <form id="live-start-form">
-    <input value="108542412346336535837" type="text" name="profileId">
+    <label>
+        프로필
+        <input value="108542412346336535837" type="text" name="profileId">
+    </label>
     <button type="button" id="live-start-button" onclick="liveStart()">라이브 시작</button>
 </form>
 </body>

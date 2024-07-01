@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"os"
 	"rtmp/google"
 )
 
 const PORT = 5862
 
 func main() {
+	_ = os.Mkdir("./sources", os.ModePerm)
+
 	router := gin.Default()
 	router.LoadHTMLGlob("resource/*.html")
 	google.Route(router)

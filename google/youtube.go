@@ -5,6 +5,7 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/api/youtube/v3"
 	"os/exec"
+	"path/filepath"
 	"rtmp/ffmpeg"
 	"time"
 )
@@ -17,6 +18,7 @@ var OauthConfig = &oauth2.Config{
 }
 
 var BackUpIndex = 0
+var ConvertIndex = 0
 var StreamProcesses = make([]*Stream, 0)
 
 type StreamStatus string
@@ -36,16 +38,36 @@ type Stream struct {
 	Backup    int
 }
 
-func GetAllChannels() (channels []*youtube.Channel) {
-	channels = make([]*youtube.Channel, 0)
+type ProfileWithChannel struct {
+	Channels []*youtube.Channel `json:"channels,omitempty"`
+	Profile  *Profile           `json:"profile,omitempty"`
+}
 
+func GetAllChannels() (result []*ProfileWithChannel) {
+	result = make([]*ProfileWithChannel, 0)
 	for _, profile := range profiles {
 		channelResponse, err := profile.GetChannels()
 
 		if err == nil {
-			channels = append(channels, channelResponse.Items...)
+			result = append(result, &ProfileWithChannel{
+				Channels: channelResponse.Items,
+				Profile:  profile,
+			})
 		}
 	}
+
+	return
+}
+
+func ConvertCodec(source string) (path string, err error) {
+	ConvertIndex += 1
+	path, err = filepath.Abs(fmt.Sprintf("sources/%d.mkv", ConvertIndex))
+
+	if err != nil {
+		return
+	}
+
+	_, err = ffmpeg.ConvertCodec(source, path)
 
 	return
 }
