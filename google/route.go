@@ -14,12 +14,19 @@ const (
 	Scopes        = "email https://www.googleapis.com/auth/youtube"
 )
 
+var badRequest = gin.H{
+	"code": http.StatusBadRequest,
+}
+
 func Route(router *gin.Engine) {
 	router.GET("/oauth/google", Oauth)
 	router.GET("/oauth/google/redirect", Redirect)
 	router.GET("/channels", Channels)
+	router.GET("/streams", Streams)
+	router.DELETE("/streams", StopLive)
 	router.POST("/live-start", StartLive)
 	router.POST("/convert-source", Convert)
+	router.GET("/categories", Categories)
 }
 
 func Oauth(c *gin.Context) {
@@ -78,14 +85,42 @@ func Convert(c *gin.Context) {
 func StartLive(c *gin.Context) {
 	profileId := ""
 	var has bool
-	if profileId, has = c.GetPostForm("profileId"); !has {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-		})
+	if profileId, has = c.GetPostForm("profile_id"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
 		return
 	}
 
-	live, err := CreateLive(profileId)
+	title := ""
+	if title, has = c.GetPostForm("title"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	description := ""
+	if description, has = c.GetPostForm("description"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	categoryId := ""
+	if categoryId, has = c.GetPostForm("category_id"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	thumbnail := ""
+	if thumbnail, has = c.GetPostForm("thumbnail"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	source := ""
+	if source, has = c.GetPostForm("source"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	live, err := CreateLive(profileId, title, description, categoryId, thumbnail, source)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    http.StatusInternalServerError,
@@ -95,4 +130,49 @@ func StartLive(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, live)
+}
+
+func Streams(c *gin.Context) {
+	values := make([]*Stream, len(StreamProcesses))
+	i := 0
+	for _, stream := range StreamProcesses {
+		values[i] = stream
+		i += 1
+	}
+
+	c.JSON(http.StatusOK, values)
+}
+
+func StopLive(c *gin.Context) {
+	streamId := ""
+	var has bool
+	if streamId, has = c.GetPostForm("stream_id"); !has {
+		c.JSON(http.StatusBadRequest, badRequest)
+		return
+	}
+
+	err := StopStream(streamId)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    http.StatusInternalServerError,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func Categories(c *gin.Context) {
+	categories, err := GetVideoCategories()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    http.StatusInternalServerError,
+			"message": err.Error(),
+		})
+	}
+
+	c.JSON(http.StatusOK, categories)
 }
